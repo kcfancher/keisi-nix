@@ -1,0 +1,17 @@
+# Where this app deploys. One mechanism (keisi-deploy), two targets.
+#
+#   push to main  → dev   (the shared keisi.co box; every app has this)
+#   push tag v*   → prod  (this app's dedicated box; added on promotion)
+#
+# `ssh` is the deploy user@host the CI ships to. `url` is the public health URL
+# CI verifies after. Leave `prod` commented out until the app is promoted.
+
+app: kirkpatrick            # TODO(you): the app slug (also its socket/DB/unit name)
+
+dev:
+  ssh: deploy@keisi.co      # TODO(you): the shared box (IP or DNS)
+  url: https://kirkpatrick.keisi.co
+
+# prod:                     # uncomment on promotion (also create the box + prod secrets)
+#   ssh: deploy@kirkpatrick.app
+#   url: https://kirkpatrick.app

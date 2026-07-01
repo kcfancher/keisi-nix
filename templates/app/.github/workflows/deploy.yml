@@ -1,0 +1,72 @@
+name: deploy
+
+# push to main → dev (keisi.co) ; push tag v* → prod (approval-gated).
+# Reads deploy/targets.yml to pick the target for the trigger.
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  target:
+    runs-on: ubuntu-latest
+    outputs:
+      tier: ${{ steps.pick.outputs.tier }}
+      app: ${{ steps.pick.outputs.app }}
+      ssh: ${{ steps.pick.outputs.ssh }}
+      url: ${{ steps.pick.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: pick
+        run: |
+          tier=dev
+          [[ "${{ github.ref }}" == refs/tags/* ]] && tier=prod
+          app=$(yq '.app' deploy/targets.yml)
+          ssh=$(yq ".${tier}.ssh" deploy/targets.yml)
+          url=$(yq ".${tier}.url" deploy/targets.yml)
+          if [[ "$ssh" == "null" || -z "$ssh" ]]; then
+            echo "::error::no '$tier' target in deploy/targets.yml"; exit 1
+          fi
+          { echo "tier=$tier"; echo "app=$app"; echo "ssh=$ssh"; echo "url=$url"; } >> "$GITHUB_OUTPUT"
+
+  deploy:
+    needs: target
+    runs-on: ubuntu-latest
+    # 'production' Environment = required-reviewer gate; 'staging' = no gate.
+    # Create both in repo Settings → Environments.
+    environment: ${{ needs.target.outputs.tier == 'prod' && 'production' || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+
+      - name: build static binary
+        run: |
+          go tool templ generate
+          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o "${{ needs.target.outputs.app }}" ./cmd/server
+
+      - name: ship + keisi-deploy
+        run: |
+          install -d -m700 ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          app="${{ needs.target.outputs.app }}"
+          ssh_target="${{ needs.target.outputs.ssh }}"
+          host="${ssh_target#*@}"
+          ssh-keyscan "$host" >> ~/.ssh/known_hosts
+          scp "$app" "$ssh_target:/tmp/$app.bin"
+          ssh "$ssh_target" "sudo keisi-deploy $app /tmp/$app.bin"
+
+      - name: verify public /healthz
+        run: |
+          for _ in $(seq 1 20); do
+            curl -sf "${{ needs.target.outputs.url }}/healthz" && exit 0
+            sleep 2
+          done
+          echo "::error::/healthz never came up at ${{ needs.target.outputs.url }}"; exit 1
