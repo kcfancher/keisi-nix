@@ -19,13 +19,14 @@
     enable = true;
     env = "staging";
     wildcardDomain = "keisi.co";
-    dnsProvider = "digitalocean"; # DNS-01 wildcard cert via DigitalOcean
+    dnsProvider = "cloudflare"; # DNS-01 wildcard cert; zone can stay wherever it lives
   };
 
-  # Caddy needs the wildcard cert via DNS-01, which needs (a) the DigitalOcean
-  # DNS plugin compiled in and (b) a DO API token exposed as CADDY_DNS_TOKEN.
+  # Caddy needs the wildcard cert via DNS-01, which needs (a) the DNS
+  # provider's Caddy plugin compiled in and (b) a zone-scoped API token
+  # exposed as CADDY_DNS_TOKEN.
   services.caddy.package = pkgs.caddy.withPlugins {
-    plugins = [ "github.com/caddy-dns/digitalocean@v0.0.0" ]; # TODO(you): pin a real version
+    plugins = [ "github.com/caddy-dns/cloudflare@v0.0.0" ]; # TODO(you): pin a real version
     hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; # TODO(you): nix build prints the right hash
   };
   sops.secrets."caddy-dns-token" = { }; # holds CADDY_DNS_TOKEN=...

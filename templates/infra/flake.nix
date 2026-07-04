@@ -2,7 +2,7 @@
   description = "keisi-infra — the app boxes (shared keisi.co dev/staging + per-app prod)";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
     keisi-nix.url = "github:youruser/keisi-nix"; # TODO(you): your keisi-nix repo
     keisi-nix.inputs.nixpkgs.follows = "nixpkgs";
   };
